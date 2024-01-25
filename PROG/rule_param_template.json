@@ -1,0 +1,93 @@
+{"rules": {
+   "Anomaly": {
+      "windowSize": 30,
+      "windowUnit": "m",
+      "anomalySeverityType": "",
+      "environment": "",
+      "serviceName": "",
+      "transactionType": ""
+   },
+    "Error count threshold": {
+      "windowSize": 0,
+      "windowUnit": "m",
+      "environment": "",
+      "serviceName": "",
+      "threshold": ""
+   },
+   "Failed transaction rate threshold": {
+      "windowSize": 0,
+      "windowUnit": "m",
+      "threshold": "",
+      "environment": "",
+      "serviceName": "",
+      "transactionType": ""
+   },
+    "Latency threshold": {
+      "aggregationType": "",
+      "threshold": 0,
+      "windowSize": 0,
+      "windowUnit": "m",
+      "environment": "",
+      "serviceName": "",
+      "transactionType": ""
+   },
+   "Log Threshold": {
+      "timeSize": 0,
+      "timeUnit": "m",
+      "count": {
+        "value": 0,
+        "comparator": ""
+      },
+      "criteria": []
+    },
+    "Anomaly detection alert": {
+      "severity": 0,
+      "resultType": "",
+      "includeInterim": false,
+      "jobSelection": {
+        "jobIds": [],
+        "groupIds": []
+      },
+      "topNBuckets": 7,
+      "lookbackInterval": null
+    },
+    "Elasticsearch query": {
+      "timeWindowSize": 0,
+      "timeWindowUnit": "",
+      "threshold": [],
+      "thresholdComparator": "",
+      "size": 1000,
+      "esQuery": "",
+      "searchType": "",
+      "index": [],
+      "timeField": ""
+    },
+    "Index threshold": {
+      "aggType": "",
+      "termSize": 0,
+      "thresholdComparator": "",
+      "timeWindowSize": 0,
+      "timeWindowUnit": "",
+      "groupBy": "",
+      "threshold": [],
+      "timeField": "",
+      "index": [],
+      "termField" : ""
+    },
+    "Transform health": {
+      "includeTransforms": [],
+      "excludeTransforms": null,
+      "testsConfig": null
+    },
+    "CPU Usage": {
+      "duration": "",
+      "threshold": 0
+    },
+    "Disk Usage": {
+      "duration": "",
+      "threshold": 0
+    },
+    "CCR read exceptions":{
+      "duration": "10m"
+    }
+}}

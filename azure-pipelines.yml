@@ -28,6 +28,7 @@ jobs:
       pip install pandas
       pip install os
       pip install shutil
+      pip install openpyxl
       python PROG/rule_generator.py
 
   - task: CopyFiles@2

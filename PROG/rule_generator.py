@@ -5,140 +5,162 @@ import os
 import shutil
 
 from param_generator import ParamGenerator
+from rule_config import BASE_TEMPLATE, ELASTIC_URL, ELASTIC_PORT, \
+    ELASTIC_HEADER, RULE_CREATION_API, RULE_TEMP_FILE, INPUT_FILE, \
+    NOTIFY, WEBHOOK_CONNECTORS, MASTER_SHEET, RULE_IDs, MAIL_TEMP, \
+    WEEBHOOK_TEMP, RULE_CHECK_API, RULE_CHECK_API_ARG, INPUT_FILE_MASTER_COPY
 
 
 class RuleGenerator:
 
-    def __init__(self):
-        self.base_template = {
-                              "params": "",
-                              "consumer": "alerts",
-                              "rule_type_id": "",
-                              "enabled": False,
-                              "schedule":{},
-                              "actions": [],
-                              "tags":[],
-                              "notify_when": "",
-                              "name": "",
-                              "throttle": ""
-                            }
-        
-        self.url = "https://mec-poc-deployment.kb.us-east-1.aws.found.io:9243/api/alerting/rule/"
 
-        self.headers = {
-                        "kbn-xsrf": "True",
-                        "Authorization": "Basic ZWxhc3RpYzpKdVRqODh3WHpRTVFGU0JObWpGSExqNXc=",
-                        "Content-Type": "application/json"
-                       }
+    def __init__(self):
+        self.base_template = BASE_TEMPLATE
     
     def load_param_temp(self):
-        rule_template = "PROG/rule_param_template.json"
-        print("Reading rule params from file : {} \n".format(rule_template.split("/")[-1]), "-"*60, sep ='')
-        rule_template_file = open(rule_template)
+
+        # PRINT STAEMENT
+        print("Reading rule params from file : {} \n".format(
+            RULE_TEMP_FILE.split("/")[-1]), "-"*60, sep ='')
+
+        rule_template_file = open(RULE_TEMP_FILE)
         rule_temp = json.load(rule_template_file)
         return rule_temp['rules']
     
-    def csv_reader(self):
-        rule_sheet = "PROG/INPUT/ELASTIC_ALERT_RULES.xlsm"
-        print("Reading input from file : {} \n".format(rule_sheet.split("/")[-1]), "-"*60, sep='')
-        rule_df = pd.read_excel(rule_sheet).iloc[:, 1:]
+    def input_reader(self):
+        # PRINT STATEMENT
+        print("Reading input from file : {} \n".format(
+            INPUT_FILE.split("/")[-1]), "-"*60, sep='')
+        
+        rule_df = pd.read_excel(INPUT_FILE).iloc[:, 1:]
         return rule_df
 
     def generate_rule_json(self):
+        # PRINT STATEMENT
         print("Generation of rules starts \n", "-"*40, sep='')
+
+        # call to get rules template
         rule_temp = self.load_param_temp()
-        rule_df = self.csv_reader()
+        # call to get input file
+        rule_df = self.input_reader()
+
+        # create data frames for success and failed requests
         input_df_pass = pd.DataFrame(columns=rule_df.columns)
         input_df_fail = pd.DataFrame(columns=rule_df.columns)
+
+        #iterating through input rows and send rule creation request
         for cnt, row in rule_df.iterrows():
-            print("Rule Name = {0}, Rule ID = {1} \n".format(row['Name'], row['Rule ID']), "="*60, sep='')
+            # PRINT STATEMENT
+            print("count = {2} Rule Name = {0}, Rule ID = {1} \n".format(
+                row['Name'], row['Rule ID'], cnt), "="*60, sep='')
+
+            # check for rule existence
             if self.check_rule_exist(row['Name']):
                 input_df_fail.loc[len(input_df_fail)] = row
                 input_df_fail['status'] = 'Pre Existing Rule Name'
                 continue
+
             base_temp = self.base_template.copy()
             rule_name = row['Rule ID']
-            rule_temp_param = rule_temp[rule_name] if rule_name in rule_temp.keys() else {}
+            rule_temp_param = rule_temp[rule_name
+                              ] if rule_name in rule_temp.keys() else {}
+            
+            # call to fill base template
             self.fill_base_temp(base_temp, row)
-            base_temp["params"], rule_id = self.fill_params(rule_temp_param, row, rule_name)
-            base_temp['rule_type_id'] = rule_id
+            # call to fill rule template
+            base_temp["params"] = self.fill_params(rule_temp_param, row,
+                                                   rule_name)
+            
+            base_temp['rule_type_id'] = RULE_IDs[rule_name]
             self.base_template.copy().clear()
+
+            # send request for rule creation
             resp = self.create_rule(base_temp)
+
+            # updating data frames for master sheet - success, failed
+            # success records success entries failed sheet records failed entries
             if resp.status_code == 200:
                 input_df_pass.loc[len(input_df_pass)] = row
-                input_df_pass['status'] = "Success [Resp code: "+ str(resp.status_code) +" ]"
-                print("rule name = {0} status = {1}".format(rule_name, input_df_pass['status']))
+                input_df_pass['status'] = "Success [Resp code: "+ str(
+                    resp.status_code) +" ]"
+                
+                # PRINT STATEMENT
+                print("rule name = {0} status = {1}".format(
+                    rule_name, input_df_pass['status']))
             else:
                 input_df_fail.loc[len(input_df_fail)] = row
                 input_df_fail['status'] = resp.text
-                print("rule name = {0} status = {1}".format(rule_name, input_df_fail['status']))
+                
+                # PRINT STATEMENT
+                print("rule name = {0} status = {1}".format(
+                    rule_name, input_df_fail['status']))
+                
+            # PRINT STATEMENT
             print("-"*60)
-        print(row)
+        
+        # update master sheet
         self.update_masterSheet(input_df_pass, input_df_fail)
+
+        #replace input file with master copy
+        print("replace input file with master copy")
+        self.replace_input_file()
         
     def fill_base_temp(self, base_temp, row):
+        # PRINT STATEMENT
         print("Filling the Base template \n", "-"*60, sep='')
-        notify = {"Only on status change": 'onActionGroupChange',
-                  "Every time ruke is active": "onActiveAlert",
-                  "On a custom action interval":  "onThrottleInterval"}
+        
+        # fill rule - name, tags, notification_condition
         base_temp['name'] = row['Name']
         base_temp['tags'] = [tag.strip() for tag in row['Tags'].split(',')]
-        base_temp["notify_when"] = notify[row['Notify']]
-        base_temp['throttle'] = None if base_temp["notify_when"] != "onThrottleInterval" else (str(row['Throttle']).replace('.0', '')+row['Throttle Unit'][0])    
-        base_temp["schedule"] = {"interval": str(row["Check every"]).replace('.0', '') + row["Time Unit"][0]}
+        base_temp["notify_when"] = NOTIFY[row['Notify']]
+
+        # fill throttle value as per row['Notify']
+        base_temp['throttle'] = None if base_temp["notify_when"
+            ] != "onThrottleInterval" else (
+            str(row['Throttle']).replace('.0', '')+row['Throttle Unit'][0])  
+        
+        base_temp["schedule"] = {"interval": str(row["Check every"]).replace(
+            '.0', '') + row["Time Unit"][0]}
+        
+        # fill actions template
         base_temp['actions'] = self.fill_base_temp_action(row)
 
     def fill_base_temp_action(self, row):
+        # PRINT ACTIONS
         print("Filling the actions requried to be triggred : ", end=" ")
+
         action = []
-        mail = {
-                "id": "elastic-cloud-email",
-                "group":"recovered",
-                "params": {
-                  "message": "",
-                  "to": [],
-                  "subject": ""
-                }
-            } 
-        webhook = {
-                    "id": "",
-                    "group": "",
-                    "params": {
-                       "body": ""
-                    }
-                }
-        webhook_connectors = { 
-                              "alert payload": "ea96caf0-08e4-11ed-be1f-7b5cc6c2e804",
-                              "aws-event-api": "9f38c2d0-4ee4-11ec-8d41-8f3c725f1524",
-                              "event-enricher-faast": "21395600-4885-11ee-8a71-6f58acc996f3",
-                              "event-enricher-saasf": "03134300-3dab-11ee-8a71-6f58acc996f3",
-                              "event-handler": "02bc49f0-0329-11ed-be1f-7b5cc6c2e804",
-                              "Moog_test": "9ad20550-06b0-11ee-84d1-818aaf217d36",
-                              "moogsoft_elasticalert": "980f7850-fdfc-11ed-84d1-818aaf217d36",
-                              "Moogsoft_FaaST_infra_alerts": "d5444290-0b4a-11ee-84d1-818aaf217d36",
-                              "moogsoft-webhook": "1ca6a8b0-01c6-11ed-be1f-7b5cc6c2e804",
-                              "moogsoft-webhook-prd": "bc970e20-fa2a-11ed-84d1-818aaf217d36",
-                              "qa-eventhandler": "033996b0-ea5c-11ed-a011-794b8adf50bf",
-                              "xcellent_care_ro": "26fa9570-23c5-11ee-ab03-2f54fe6e66d7"
-                            }
+        mail = MAIL_TEMP
+        webhook = WEEBHOOK_TEMP
+        
+        # fill action template
         if row['Actions'] == 'Mail' or row['Actions'] == 'both':
             print("Mail",end= " ")
-            mail['params']["message"] = row['Mail-Message']
-            mail['params']['to'] = [mail.strip() for mail in row['Mail-Receiver'].split(',')]
-            mail['params']['subject'] = row['Mail-Subject']
-            mail['group'] = row['Mail-Group']
+            mail['params']["message"] = row.get('Mail-Message', '')
+            mail['params']['to'] = [mail.strip() for mail in row.get(
+                'Mail-Receiver', '').split(',')]
+            mail['params']['subject'] = row.get('Mail-Subject', '')
+            mail['group'] = row.get('Mail-Group', '')
             action.append(mail)
+
+        # fill webhook template
         if row['Actions'] == 'Webhook' or row['Actions'] == 'both':
             print("Webhook", sep = '')
-            webhook['group'] = row['Webhook-Group']
-            webhook['params']['body'] = row['Webhook-Body']
-            webhook['id'] = webhook_connectors[row['Webhook-Connector']]
+            webhook['group'] = row.get('Webhook-Group', '')
+            webhook['params']['body'] = row.get('Webhook-Body', '')
+            webhook['id'] = WEBHOOK_CONNECTORS.get(row.get(
+                'Webhook-Connector', ''), '')
             action.append(webhook)
+
+        # PRINT STAEMENT
         print("\n","-"*60)
+
         return action
 
     def fill_params(self, rule_temp_param, rule_entry, rule_name):
+        # create instance for ParamGenerator (class with methods for filling rule param template)
         par_gen = ParamGenerator(rule_temp_param, rule_entry)
+        # map rule id name with method to fill particular rule
         param_dict = {
             'Anomaly' : par_gen.anomaly_param,
             'Latency threshold' : par_gen.latency_param,
@@ -156,65 +178,89 @@ class RuleGenerator:
             'Elasticsearch version mismatch': par_gen.no_param,
             'Kibana version mismatch': par_gen.no_param
         }
-        print("call method = {} for filling rule params\n".format(rule_name), "-"*60, sep='')
+
+        # PRINT STATEMENT
+        print("call method = {} for filling rule params\n".format(
+            rule_name), "-"*60, sep='')
+        
+        # call mapped method and get the filled template for rule params
         return param_dict.get(rule_name)()
     
     def create_rule(self, base_temp):
-        #import pdb; pdb.set_trace()
+        # PRINT STATEMENT
         print("send payload request to fill rules\n", "-"*60, sep='')
 
+        # convert rule input to json
         payload = json.dumps(base_temp)
-        #print("payload")
+
+        # PRINT PAYLOAD
         print("payload \n", "-"*60, "\n", payload, "\n", "-"*60, sep='')
-        response = requests.post(self.url, headers=self.headers, json=payload)
-        print("Response Status Code = {}\n".format(response.status_code), "-"*60, sep='')
+
+        # create url for sending create request
+        url = ELASTIC_URL + str(ELASTIC_PORT) + RULE_CREATION_API
+        # send rule creation request to elastic
+        response = requests.post(url, headers=ELASTIC_HEADER, json=payload)
+        
+        # PRINT REPOSNSE CODE
+        print("Response Status Code = {}\n".format(
+            response.status_code), "-"*60, sep='')
+        
+        # return response
         return response
     
     def update_masterSheet(self, input_df_pass, input_df_fail):
-        file_path = "RECORDS/ELASTIC_ALERT_RULES_MASTER.xlsx"
-        print("updating master sheet = {}\n".format(file_path.split("/")[-1]), "-"*60, sep='')
-    
+        # PRINT MASTER SHEET NAME 
+        print("updating master sheet = {}\n".format(
+            MASTER_SHEET.split("/")[-1]), "-"*60, sep='')
+        
         # Read existing 'success' sheet
         try:
-            df_success = pd.read_excel(file_path, sheet_name='success', engine='openpyxl')
+            df_success = pd.read_excel(
+                MASTER_SHEET, sheet_name='success', engine='openpyxl')
         except FileNotFoundError:
             df_success = pd.DataFrame()
     
         # Concatenate new data with existing 'success' data
-        merged_df_pass = pd.concat([df_success, input_df_pass], ignore_index=True)
+        merged_df_pass = pd.concat([df_success, input_df_pass], 
+                                   ignore_index=True)
     
         # Read existing 'failed' sheet
         try:
-            df_failed = pd.read_excel(file_path, sheet_name='failed', engine='openpyxl')
+            df_failed = pd.read_excel(MASTER_SHEET, sheet_name='failed',
+                                     engine='openpyxl')
         except FileNotFoundError:
             df_failed = pd.DataFrame()
     
         # Concatenate new data with existing 'failed' data
-        merged_df_fail = pd.concat([df_failed, input_df_fail], ignore_index=True)
+        merged_df_fail = pd.concat([df_failed, input_df_fail],
+                                    ignore_index=True)
     
         # Write updated DataFrames back to Excel sheets
-        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        with pd.ExcelWriter(MASTER_SHEET, engine='openpyxl') as writer:
             merged_df_pass.to_excel(writer, index=False, sheet_name='success')
             merged_df_fail.to_excel(writer, index=False, sheet_name='failed')
     
     def check_rule_exist(self, name):
-        url = 'https://mec-poc-deployment.kb.us-east-1.aws.found.io:9243/internal/alerting/rules/_find?page=1&per_page=10&search_fields=["name","tags"]&search='+ name +'&default_search_operator=AND&sort_field=name&sort_order=asc'
-        response = requests.get(url, headers=self.headers)
+        url = ELASTIC_URL + str(ELASTIC_PORT
+                                ) + RULE_CHECK_API + name + RULE_CHECK_API_ARG
+        response = requests.get(url, headers=ELASTIC_HEADER)
         if response.status_code == 200:
-            exist = json.loads(response.__dict__['_content'].decode('utf-8')).get('data')
+            exist = json.loads(response.__dict__['_content'].decode(
+                'utf-8')).get('data')
             if exist:
                 print('rule = {} exists'.format(name))
                 return True
             else:
                 print('rule = {} doest not exists'.format(name))
         else:
+            # PRINT RESPONSE CODE and MESSAGE if request fails
             print(f"Error: {response.status_code} - {response.text}")
         return False
-    
-
-    def replace_file(self):
-        source_file = "RECORDS/ELASTIC_ALERT_RULES.xlsm"
-        destination_file = "PROG/INPUT/ELASTIC_ALERT_RULES.xlsm"
+   
+    def replace_input_file(self):
+        # replace input file with master
+        source_file = INPUT_FILE_MASTER_COPY
+        destination_file = INPUT_FILE
         # Check if the source file exists
         if not os.path.exists(source_file):
             print(f"Source file '{source_file}' does not exist.")

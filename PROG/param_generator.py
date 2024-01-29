@@ -190,7 +190,8 @@ class ParamGenerator:
     def transform_health_param(self):
         self.rule_temp_param['includeTransforms'] = [val.strip() for val
                                                      in self.rule_entry.get(
-                                                     'INCLUDE TRANSFORM', '').split(',')]
+                                                     'INCLUDE TRANSFORM', ''
+                                                     ).split(',')]
         return self.rule_temp_param
         #self.rule_temp_param['excludeTransforms'] = self.rule_entry.get('EXCLUDE TRANSFORM', '')
         #self.rule_temp_param['testsConfig'] = self.rule_entry.get('TESTSCONFIG', '')

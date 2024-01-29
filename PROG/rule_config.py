@@ -2,7 +2,7 @@ BASE_TEMPLATE = {
     "params": "",
     "consumer": "alerts",
     "rule_type_id": "",
-    "enabled": False,
+    "enabled": True,
     "schedule":{},
     "actions": [],
     "tags":[],

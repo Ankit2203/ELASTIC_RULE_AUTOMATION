@@ -3,43 +3,44 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
-trigger:
-  branches:
-    exclude:
-      - '*'
-  paths:
-    include:
-      - 'PROG/INPUT/ELASTIC_ALERT_RULES.xlsm'
-
-jobs:
-- job: RunPythonScript
-  pool:
-    vmImage: 'ubuntu-latest'
-  steps:
-  - checkout: self
-  - task: UsePythonVersion@0
-    inputs:
-      versionSpec: '3.x'
-      addToPath: true
-      architecture: 'x64'
-  - script: |
-      pip install requests
-      pip install json
-      pip install pandas
-      pip install os
-      pip install shutil
-      pip install openpyxl
-      python PROG/rule_generator.py
-
-  - task: CopyFiles@2
-    inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-
-  - task: PublishBuildArtifacts@1
-    inputs:
-      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      ArtifactName: 'drop'
-      publishLocation: 'Container'
-
-
- 
+#trigger:
+#  branches:
+#    exclude:
+#      - '*'
+#  paths:
+#    include:
+#      - 'PROG/INPUT/ELASTIC_ALERT_RULES.xlsm'
+#
+#jobs:
+#- job: RunPythonScript
+#  pool:
+#    vmImage: 'ubuntu-latest'
+#  steps:
+#  - checkout: self
+#  - task: UsePythonVersion@0
+#    inputs:
+#      versionSpec: '3.x'
+#      addToPath: true
+#      architecture: 'x64'
+#  - script: |
+#      pip install requests
+#      pip install json
+#      pip install pandas
+#      pip install os
+#      pip install shutil
+#      pip install openpyxl
+#      python PROG/rule_generator.py
+#
+#  - task: CopyFiles@2
+#    inputs:
+#      targetFolder: '$(Build.ArtifactStagingDirectory)'
+#
+#  - task: PublishBuildArtifacts@1
+#    inputs:
+#      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+#      ArtifactName: 'drop'
+#      publishLocation: 'Container'
+#
+#
+# 
+#
